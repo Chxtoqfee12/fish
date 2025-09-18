@@ -1,0 +1,248 @@
+-- ================== Services ==================
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local net = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
+
+local RF_Charge = net:WaitForChild("RF/ChargeFishingRod")
+local RF_Minigame = net:WaitForChild("RF/RequestFishingMinigameStarted")
+local RE_Completed = net:WaitForChild("RE/FishingCompleted")
+local RF_SellAll = net:WaitForChild("RF/SellAllItems")
+local RE_Equip = net:WaitForChild("RE/EquipToolFromHotbar")
+
+-- ================== ตัวแปรควบคุม ==================
+getgenv().AutoFishing = false
+getgenv().SpeedBoost = 16
+getgenv().WalkOnWater = false
+local WaterHeight = 5
+local UI_Minimized = false
+
+-- ================== ฟังก์ชัน ==================
+local function StartSpamCompleted()
+    task.spawn(function()
+        while getgenv().AutoFishing do
+            pcall(function() RE_Completed:FireServer() end)
+            task.wait(0.1)
+        end
+    end)
+end
+
+local function StartFishingLoop()
+    task.spawn(function()
+        while getgenv().AutoFishing do
+            pcall(function() RE_Equip:FireServer(1) end)
+            task.wait(0.3)
+            pcall(function() RF_Charge:InvokeServer(tick()) end)
+            task.wait(0.5)
+            pcall(function() RF_Minigame:InvokeServer(-1.233184814453125,0.9786578467623468) end)
+            task.wait(3)
+        end
+    end)
+end
+
+-- ================== Speed Boost ==================
+task.spawn(function()
+    while true do
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = getgenv().SpeedBoost
+        end
+        task.wait(0.1)
+    end
+end)
+
+-- ================== Walk on Water ==================
+task.spawn(function()
+    while true do
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = LocalPlayer.Character.HumanoidRootPart
+            if getgenv().WalkOnWater then
+                if not hrp:FindFirstChild("WaterBP") then
+                    local bp = Instance.new("BodyPosition")
+                    bp.Name = "WaterBP"
+                    bp.MaxForce = Vector3.new(1e5,1e5,1e5)
+                    bp.P = 1e4
+                    bp.Position = hrp.Position + Vector3.new(0,WaterHeight,0)
+                    bp.Parent = hrp
+                else
+                    hrp.WaterBP.Position = hrp.Position + Vector3.new(0,WaterHeight,0)
+                end
+            else
+                if hrp:FindFirstChild("WaterBP") then hrp.WaterBP:Destroy() end
+            end
+        end
+        task.wait(0.1)
+    end
+end)
+
+-- ================== UI ==================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoFishingUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 260, 0, 300)
+Frame.Position = UDim2.new(0.5, -130, 0.3, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+Frame.BorderSizePixel = 0
+Frame.Parent = ScreenGui
+
+-- ================== Drag Function ==================
+local dragging = false
+local dragInput, mousePos, framePos
+
+Frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        mousePos = input.Position
+        framePos = Frame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Frame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - mousePos
+        Frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+    end
+end)
+
+-- ================== UI Elements ==================
+local function createLabel(text,posY)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1,-20,0,30)
+    lbl.Position = UDim2.new(0,10,posY,0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(255,255,255)
+    lbl.Font = Enum.Font.SourceSansBold
+    lbl.TextSize = 18
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = Frame
+    return lbl
+end
+
+local function createButton(text,posY,color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9,0,0,35)
+    btn.Position = UDim2.new(0.05,0,posY,0)
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 16
+    btn.Parent = Frame
+    return btn
+end
+
+createLabel("🎣 Auto Fishing CHX",0)
+
+local CloseButton = createButton("X",0,Color3.fromRGB(200,50,50))
+CloseButton.Size = UDim2.new(0,25,0,25)
+CloseButton.Position = UDim2.new(1,-30,0,5)
+
+-- Minimize/Maximize Button
+local MinimizeButton = createButton("—",0,Color3.fromRGB(150,150,150))
+MinimizeButton.Size = UDim2.new(0,25,0,25)
+MinimizeButton.Position = UDim2.new(1,-60,0,5)
+
+local ToggleButton = createButton("Auto Fishing: OFF",0.15,Color3.fromRGB(50,150,50))
+local SellButton = createButton("Sell All",0.32,Color3.fromRGB(100,100,255))
+local WaterButton = createButton("Walk On Water: OFF",0.49,Color3.fromRGB(0,200,200))
+
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Size = UDim2.new(0.9,0,0,25)
+SpeedLabel.Position = UDim2.new(0.05,0,0.66,0)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Text = "Speed: "..getgenv().SpeedBoost
+SpeedLabel.TextColor3 = Color3.fromRGB(255,255,255)
+SpeedLabel.Font = Enum.Font.SourceSans
+SpeedLabel.TextSize = 14
+SpeedLabel.Parent = Frame
+
+local SpeedSlider = Instance.new("TextBox")
+SpeedSlider.Size = UDim2.new(0.9,0,0,30)
+SpeedSlider.Position = UDim2.new(0.05,0,0.73,0)
+SpeedSlider.BackgroundColor3 = Color3.fromRGB(50,50,50)
+SpeedSlider.TextColor3 = Color3.fromRGB(255,255,255)
+SpeedSlider.Text = tostring(getgenv().SpeedBoost)
+SpeedSlider.Font = Enum.Font.SourceSans
+SpeedSlider.TextSize = 14
+SpeedSlider.ClearTextOnFocus = false
+SpeedSlider.Parent = Frame
+
+-- ================== Functions ==================
+local function updateUIVisibility()
+    ToggleButton.Visible = not UI_Minimized
+    SellButton.Visible = not UI_Minimized
+    WaterButton.Visible = not UI_Minimized
+    SpeedLabel.Visible = not UI_Minimized
+    SpeedSlider.Visible = not UI_Minimized
+end
+
+MinimizeButton.MouseButton1Click:Connect(function()
+    UI_Minimized = not UI_Minimized
+    if UI_Minimized then
+        MinimizeButton.Text = "+"
+        Frame.Size = UDim2.new(0,260,0,40)
+    else
+        MinimizeButton.Text = "—"
+        Frame.Size = UDim2.new(0,260,0,300)
+    end
+    updateUIVisibility()
+end)
+
+-- ================== Events ==================
+ToggleButton.MouseButton1Click:Connect(function()
+    getgenv().AutoFishing = not getgenv().AutoFishing
+    if getgenv().AutoFishing then
+        ToggleButton.Text = "Auto Fishing: ON"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
+        StartSpamCompleted()
+        StartFishingLoop()
+    else
+        ToggleButton.Text = "Auto Fishing: OFF"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(50,150,50)
+    end
+end)
+
+SellButton.MouseButton1Click:Connect(function()
+    pcall(function() RF_SellAll:InvokeServer() end)
+end)
+
+WaterButton.MouseButton1Click:Connect(function()
+    getgenv().WalkOnWater = not getgenv().WalkOnWater
+    if getgenv().WalkOnWater then
+        WaterButton.Text = "Walk On Water: ON"
+        WaterButton.BackgroundColor3 = Color3.fromRGB(0,255,255)
+    else
+        WaterButton.Text = "Walk On Water: OFF"
+        WaterButton.BackgroundColor3 = Color3.fromRGB(0,200,200)
+    end
+end)
+
+SpeedSlider.FocusLost:Connect(function()
+    local value = tonumber(SpeedSlider.Text)
+    if value then
+        getgenv().SpeedBoost = value
+        SpeedLabel.Text = "Speed: "..value
+    else
+        SpeedSlider.Text = tostring(getgenv().SpeedBoost)
+    end
+end)
+
+CloseButton.MouseButton1Click:Connect(function()
+    getgenv().AutoFishing = false
+    ScreenGui:Destroy()
+end)
