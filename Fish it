@@ -1,102 +1,99 @@
--- ================== Services ==================
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- ===== Services =====
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
-local net = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local PetsFolder = workspace:WaitForChild("Pets")
+local FishingRE = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("FishingRE")
 
-local RF_Charge = net:WaitForChild("RF/ChargeFishingRod")
-local RF_Minigame = net:WaitForChild("RF/RequestFishingMinigameStarted")
-local RE_Completed = net:WaitForChild("RE/FishingCompleted")
-local RF_SellAll = net:WaitForChild("RF/SellAllItems")
-local RE_Equip = net:WaitForChild("RE/EquipToolFromHotbar")
+-- ===== Variables =====
+local AutoClaimEnabled = false
+local ClaimDelay = 2
+local AutoFish2Enabled = false
+local UIExists = true
+local argsClaim = {"Claim"}
 
--- ================== ตัวแปรควบคุม ==================
-getgenv().AutoFishing = false
-getgenv().SpeedBoost = 16
-getgenv().WalkOnWater = false
-local WaterHeight = 5
-local UI_Minimized = false
-
--- ================== ฟังก์ชัน ==================
-local function StartSpamCompleted()
-    task.spawn(function()
-        while getgenv().AutoFishing do
-            pcall(function() RE_Completed:FireServer() end)
-            task.wait(0.1)
-        end
-    end)
-end
-
-local function StartFishingLoop()
-    task.spawn(function()
-        while getgenv().AutoFishing do
-            pcall(function() RE_Equip:FireServer(1) end)
-            task.wait(0.3)
-            pcall(function() RF_Charge:InvokeServer(tick()) end)
-            task.wait(0.5)
-            pcall(function() RF_Minigame:InvokeServer(-1.233184814453125,0.9786578467623468) end)
-            task.wait(3)
-        end
-    end)
-end
-
--- ================== Speed Boost ==================
-task.spawn(function()
-    while true do
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.WalkSpeed = getgenv().SpeedBoost
-        end
-        task.wait(0.1)
-    end
-end)
-
--- ================== Walk on Water ==================
-task.spawn(function()
-    while true do
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = LocalPlayer.Character.HumanoidRootPart
-            if getgenv().WalkOnWater then
-                if not hrp:FindFirstChild("WaterBP") then
-                    local bp = Instance.new("BodyPosition")
-                    bp.Name = "WaterBP"
-                    bp.MaxForce = Vector3.new(1e5,1e5,1e5)
-                    bp.P = 1e4
-                    bp.Position = hrp.Position + Vector3.new(0,WaterHeight,0)
-                    bp.Parent = hrp
-                else
-                    hrp.WaterBP.Position = hrp.Position + Vector3.new(0,WaterHeight,0)
-                end
-            else
-                if hrp:FindFirstChild("WaterBP") then hrp.WaterBP:Destroy() end
-            end
-        end
-        task.wait(0.1)
-    end
-end)
-
--- ================== UI ==================
+-- ===== UI =====
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AutoFishingUI"
+ScreenGui.Name = "AutoHubUI"
+ScreenGui.Parent = PlayerGui
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local Frame = Instance.new("Frame")
-Frame.Size = UDim2.new(0, 260, 0, 300)
-Frame.Position = UDim2.new(0.5, -130, 0.3, 0)
-Frame.BackgroundColor3 = Color3.fromRGB(35,35,35)
-Frame.BorderSizePixel = 0
+Frame.Size = UDim2.new(0, 260, 0, 180)
+Frame.Position = UDim2.new(0.35,0,0.35,0)
+Frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 Frame.Parent = ScreenGui
+Instance.new("UICorner", Frame).CornerRadius = UDim.new(0,12)
 
--- ================== Drag Function ==================
-local dragging = false
-local dragInput, mousePos, framePos
+-- Title
+local Title = Instance.new("TextLabel", Frame)
+Title.Size = UDim2.new(1, -30, 0, 30)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "🐾 Auto Hub"
+Title.TextColor3 = Color3.fromRGB(255,255,255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+Title.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Close Button
+local CloseBtn = Instance.new("TextButton", Frame)
+CloseBtn.Size = UDim2.new(0,30,0,30)
+CloseBtn.Position = UDim2.new(1,-30,0,0)
+CloseBtn.Text = "X"
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
+CloseBtn.TextColor3 = Color3.fromRGB(255,255,255)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 14
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0,8)
+CloseBtn.MouseButton1Click:Connect(function()
+    AutoClaimEnabled = false
+    AutoFish2Enabled = false
+    UIExists = false
+    ScreenGui:Destroy()
+end)
+
+-- ===== Toggle Buttons =====
+local function createToggle(text, posY, callback)
+    local btn = Instance.new("TextButton", Frame)
+    btn.Size = UDim2.new(0, 200, 0, 35)
+    btn.Position = UDim2.new(0.5,-100,0,posY)
+    btn.Text = text..": OFF"
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.BackgroundColor3 = Color3.fromRGB(70,130,180)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,8)
+    local enabled = false
+    btn.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        btn.Text = text..(enabled and ": ON" or ": OFF")
+        btn.BackgroundColor3 = enabled and Color3.fromRGB(34,139,34) or Color3.fromRGB(70,130,180)
+        callback(enabled)
+    end)
+    return btn
+end
+
+-- Auto Claim Toggle
+createToggle("Auto Claim",40,function(state) AutoClaimEnabled = state end)
+
+-- Auto Fish 2 Toggle
+createToggle("Auto Fish 2",85,function(state) AutoFish2Enabled = state end)
+
+-- ===== Dragging System =====
+local dragging, dragInput, dragStart, startPos
+local function update(input)
+    local delta = input.Position - dragStart
+    Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
 
 Frame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
-        mousePos = input.Position
-        framePos = Frame.Position
+        dragStart = input.Position
+        startPos = Frame.Position
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
@@ -113,136 +110,226 @@ end)
 
 UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
-        local delta = input.Position - mousePos
-        Frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+        update(input)
     end
 end)
 
--- ================== UI Elements ==================
-local function createLabel(text,posY)
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1,-20,0,30)
-    lbl.Position = UDim2.new(0,10,posY,0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = text
-    lbl.TextColor3 = Color3.fromRGB(255,255,255)
-    lbl.Font = Enum.Font.SourceSansBold
-    lbl.TextSize = 18
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = Frame
-    return lbl
+-- ===== Functions =====
+local function ClaimPet(pet)
+    pcall(function()
+        local root = pet:FindFirstChild("RootPart")
+        if root then
+            for _, child in pairs(root:GetChildren()) do
+                if child:IsA("RemoteEvent") then
+                    child:FireServer(unpack(argsClaim))
+                end
+            end
+        end
+    end)
 end
 
-local function createButton(text,posY,color)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9,0,0,35)
-    btn.Position = UDim2.new(0.05,0,posY,0)
-    btn.BackgroundColor3 = color
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255,255,255)
-    btn.Font = Enum.Font.SourceSansBold
-    btn.TextSize = 16
-    btn.Parent = Frame
-    return btn
+local function AutoFish2()
+    local focusArgs = {"Focus","FishRob"}
+    local throwArgs = {
+        "Throw",
+        {Bait = "FishingBait2", Pos = Vector3.new(156.904, 11, 558.944)}
+    }
+    local successArgs = {"POUT",{SUC=1}}
+
+    while AutoFish2Enabled and UIExists do
+        -- เช็คว่าถือเบ็ดหรือยัง ถ้ายังถือไม่ได้ถือให้เอง
+        local hasRod = false
+        -- ตัวอย่างเช็ก (ต้องแก้ตามเกมจริง) เช่น ถ้ามีตัวแปรใน Player หรือ Tool
+        local char = LocalPlayer.Character
+        if char then
+            for _, tool in pairs(char:GetChildren()) do
+                if tool:IsA("Tool") and tool.Name == "FishingRod2" then
+                    hasRod = true
+                    break
+                end
+            end
+        end
+
+        if not hasRod then
+            pcall(function()
+                ReplicatedStorage:WaitForChild("Remote"):WaitForChild("CharacterRE"):FireServer(unpack(focusArgs))
+            end)
+        end
+
+        -- โยนเบ็ด
+        pcall(function()
+            FishingRE:FireServer(unpack(throwArgs))
+        end)
+
+        -- Spam Success รัว ๆ ทุก 0.1 วิ เป็นเวลา 1 วิ
+        local timer = 0
+        while timer < 1 do
+            if not AutoFish2Enabled or not UIExists then break end
+            pcall(function()
+                FishingRE:FireServer(unpack(successArgs))
+            end)
+            task.wait(0.1)
+            timer = timer + 0.1
+        end
+        -- วนกลับไปโยนเบ็ดใหม่
+    end
 end
 
-createLabel("🎣 Auto Fishing CHX",0)
 
-local CloseButton = createButton("X",0,Color3.fromRGB(200,50,50))
-CloseButton.Size = UDim2.new(0,25,0,25)
-CloseButton.Position = UDim2.new(1,-30,0,5)
+-- ===== Loops =====
+-- Auto Claim Loop
+task.spawn(function()
+    while UIExists do
+        if AutoClaimEnabled then
+            for _, pet in pairs(PetsFolder:GetChildren()) do
+                if not AutoClaimEnabled or not UIExists then break end
+                ClaimPet(pet)
+            end
+            if AutoClaimEnabled and UIExists then
+                task.wait(ClaimDelay)
+            end
+        else
+            task.wait(0.2)
+        end
+    end
+end)
 
--- Minimize/Maximize Button
-local MinimizeButton = createButton("—",0,Color3.fromRGB(150,150,150))
-MinimizeButton.Size = UDim2.new(0,25,0,25)
-MinimizeButton.Position = UDim2.new(1,-60,0,5)
+-- Auto Fish 2 Loop
+task.spawn(function()
+    while UIExists do
+        if AutoFish2Enabled then
+            AutoFish2()
+        else
+            task.wait(0.2)
+        end
+    end
+end)
 
-local ToggleButton = createButton("Auto Fishing: OFF",0.15,Color3.fromRGB(50,150,50))
-local SellButton = createButton("Sell All",0.32,Color3.fromRGB(100,100,255))
-local WaterButton = createButton("Walk On Water: OFF",0.49,Color3.fromRGB(0,200,200))
 
-local SpeedLabel = Instance.new("TextLabel")
-SpeedLabel.Size = UDim2.new(0.9,0,0,25)
-SpeedLabel.Position = UDim2.new(0.05,0,0.66,0)
-SpeedLabel.BackgroundTransparency = 1
-SpeedLabel.Text = "Speed: "..getgenv().SpeedBoost
-SpeedLabel.TextColor3 = Color3.fromRGB(255,255,255)
-SpeedLabel.Font = Enum.Font.SourceSans
-SpeedLabel.TextSize = 14
-SpeedLabel.Parent = Frame
+-- ===== Variables Auto Fish 1 =====
+local AutoFish1Enabled = false
 
-local SpeedSlider = Instance.new("TextBox")
-SpeedSlider.Size = UDim2.new(0.9,0,0,30)
-SpeedSlider.Position = UDim2.new(0.05,0,0.73,0)
-SpeedSlider.BackgroundColor3 = Color3.fromRGB(50,50,50)
-SpeedSlider.TextColor3 = Color3.fromRGB(255,255,255)
-SpeedSlider.Text = tostring(getgenv().SpeedBoost)
-SpeedSlider.Font = Enum.Font.SourceSans
-SpeedSlider.TextSize = 14
-SpeedSlider.ClearTextOnFocus = false
-SpeedSlider.Parent = Frame
+-- ===== Toggle Button =====
+createToggle("Auto Fish 1",130,function(state) AutoFish1Enabled = state end)
 
--- ================== Functions ==================
-local function updateUIVisibility()
-    ToggleButton.Visible = not UI_Minimized
-    SellButton.Visible = not UI_Minimized
-    WaterButton.Visible = not UI_Minimized
-    SpeedLabel.Visible = not UI_Minimized
-    SpeedSlider.Visible = not UI_Minimized
+-- ===== Auto Fish 1 Function =====
+local function AutoFish1()
+    local focusArgs = {"Focus","FishRob"}
+    local throwArgs = {
+        "Throw",
+        {Bait = "FishingBait1", Pos = Vector3.new(156.904, 11, 558.944)}
+    }
+    local successArgs = {"POUT",{SUC=1}}
+
+    while AutoFish1Enabled and UIExists do
+        -- เช็คถือเบ็ด
+        local hasRod = false
+        local char = LocalPlayer.Character
+        if char then
+            for _, tool in pairs(char:GetChildren()) do
+                if tool:IsA("Tool") and tool.Name == "FishingRod1" then
+                    hasRod = true
+                    break
+                end
+            end
+        end
+
+        if not hasRod then
+            pcall(function()
+                ReplicatedStorage:WaitForChild("Remote"):WaitForChild("CharacterRE"):FireServer(unpack(focusArgs))
+            end)
+        end
+
+        -- โยนเบ็ด
+        pcall(function()
+            FishingRE:FireServer(unpack(throwArgs))
+        end)
+
+        -- Spam Success รัว ๆ 1 วิ
+        local timer = 0
+        while timer < 1 do
+            if not AutoFish1Enabled or not UIExists then break end
+            pcall(function()
+                FishingRE:FireServer(unpack(successArgs))
+            end)
+            task.wait(0.1)
+            timer = timer + 0.1
+        end
+    end
 end
 
-MinimizeButton.MouseButton1Click:Connect(function()
-    UI_Minimized = not UI_Minimized
-    if UI_Minimized then
-        MinimizeButton.Text = "+"
-        Frame.Size = UDim2.new(0,260,0,40)
-    else
-        MinimizeButton.Text = "—"
-        Frame.Size = UDim2.new(0,260,0,300)
-    end
-    updateUIVisibility()
-end)
-
--- ================== Events ==================
-ToggleButton.MouseButton1Click:Connect(function()
-    getgenv().AutoFishing = not getgenv().AutoFishing
-    if getgenv().AutoFishing then
-        ToggleButton.Text = "Auto Fishing: ON"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
-        StartSpamCompleted()
-        StartFishingLoop()
-    else
-        ToggleButton.Text = "Auto Fishing: OFF"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(50,150,50)
+-- ===== Auto Fish 1 Loop =====
+task.spawn(function()
+    while UIExists do
+        if AutoFish1Enabled then
+            AutoFish1()
+        else
+            task.wait(0.2)
+        end
     end
 end)
 
-SellButton.MouseButton1Click:Connect(function()
-    pcall(function() RF_SellAll:InvokeServer() end)
-end)
 
-WaterButton.MouseButton1Click:Connect(function()
-    getgenv().WalkOnWater = not getgenv().WalkOnWater
-    if getgenv().WalkOnWater then
-        WaterButton.Text = "Walk On Water: ON"
-        WaterButton.BackgroundColor3 = Color3.fromRGB(0,255,255)
-    else
-        WaterButton.Text = "Walk On Water: OFF"
-        WaterButton.BackgroundColor3 = Color3.fromRGB(0,200,200)
+-- ===== Variables Auto Fish 3 =====
+local AutoFish3Enabled = false
+
+-- ===== Toggle Button =====
+createToggle("Auto Fish 3",160,function(state) AutoFish3Enabled = state end)
+
+-- ===== Auto Fish 3 Function =====
+local function AutoFish3()
+    local focusArgs = {"Focus","FishRob"}
+    local throwArgs = {
+        "Throw",
+        {Bait = "FishingBait3", Pos = Vector3.new(156.904, 11, 558.944)}
+    }
+    local successArgs = {"POUT",{SUC=1}}
+
+    while AutoFish3Enabled and UIExists do
+        -- เช็คถือเบ็ด
+        local hasRod = false
+        local char = LocalPlayer.Character
+        if char then
+            for _, tool in pairs(char:GetChildren()) do
+                if tool:IsA("Tool") and tool.Name:find("FishingRod") then
+                    hasRod = true
+                    break
+                end
+            end
+        end
+
+        if not hasRod then
+            pcall(function()
+                ReplicatedStorage:WaitForChild("Remote"):WaitForChild("CharacterRE"):FireServer(unpack(focusArgs))
+            end)
+        end
+
+        -- โยนเบ็ด
+        pcall(function()
+            FishingRE:FireServer(unpack(throwArgs))
+        end)
+
+        -- Spam Success รัว ๆ 1 วิ
+        local timer = 0
+        while timer < 1 do
+            if not AutoFish3Enabled or not UIExists then break end
+            pcall(function()
+                FishingRE:FireServer(unpack(successArgs))
+            end)
+            task.wait(0.1)
+            timer = timer + 0.1
+        end
+    end
+end
+
+-- ===== Auto Fish 3 Loop =====
+task.spawn(function()
+    while UIExists do
+        if AutoFish3Enabled then
+            AutoFish3()
+        else
+            task.wait(0.2)
+        end
     end
 end)
 
-SpeedSlider.FocusLost:Connect(function()
-    local value = tonumber(SpeedSlider.Text)
-    if value then
-        getgenv().SpeedBoost = value
-        SpeedLabel.Text = "Speed: "..value
-    else
-        SpeedSlider.Text = tostring(getgenv().SpeedBoost)
-    end
-end)
-
-CloseButton.MouseButton1Click:Connect(function()
-    getgenv().AutoFishing = false
-    ScreenGui:Destroy()
-end)
