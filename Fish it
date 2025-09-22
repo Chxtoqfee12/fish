@@ -10,8 +10,11 @@ local FishingRE = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Fishing
 -- ===== Variables =====
 local AutoClaimEnabled = false
 local ClaimDelay = 2
+local AutoFish1Enabled = false
 local AutoFish2Enabled = false
+local AutoFish3Enabled = false
 local UIExists = true
+local Minimized = false
 local argsClaim = {"Claim"}
 
 -- ===== UI =====
@@ -21,15 +24,21 @@ ScreenGui.Parent = PlayerGui
 ScreenGui.ResetOnSpawn = false
 
 local Frame = Instance.new("Frame")
-Frame.Size = UDim2.new(0, 260, 0, 180)
+Frame.Size = UDim2.new(0, 260, 0, 250)
 Frame.Position = UDim2.new(0.35,0,0.35,0)
 Frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 Frame.Parent = ScreenGui
 Instance.new("UICorner", Frame).CornerRadius = UDim.new(0,12)
 
+-- Top Bar
+local TopBar = Instance.new("Frame", Frame)
+TopBar.Size = UDim2.new(1, 0, 0, 30)
+TopBar.BackgroundColor3 = Color3.fromRGB(50,50,50)
+Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0,12)
+
 -- Title
-local Title = Instance.new("TextLabel", Frame)
-Title.Size = UDim2.new(1, -30, 0, 30)
+local Title = Instance.new("TextLabel", TopBar)
+Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "🐾 Auto Hub"
@@ -39,33 +48,72 @@ Title.TextSize = 16
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
 -- Close Button
-local CloseBtn = Instance.new("TextButton", Frame)
-CloseBtn.Size = UDim2.new(0,30,0,30)
-CloseBtn.Position = UDim2.new(1,-30,0,0)
+local CloseBtn = Instance.new("TextButton", TopBar)
+CloseBtn.Size = UDim2.new(0,30,0,22)
+CloseBtn.Position = UDim2.new(1,-35,0.5,-11)
 CloseBtn.Text = "X"
 CloseBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
 CloseBtn.TextColor3 = Color3.fromRGB(255,255,255)
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.TextSize = 14
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0,8)
+
 CloseBtn.MouseButton1Click:Connect(function()
     AutoClaimEnabled = false
+    AutoFish1Enabled = false
     AutoFish2Enabled = false
+    AutoFish3Enabled = false
     UIExists = false
     ScreenGui:Destroy()
 end)
 
+-- Minimize Button
+local MinBtn = Instance.new("TextButton", TopBar)
+MinBtn.Size = UDim2.new(0,30,0,22)
+MinBtn.Position = UDim2.new(1,-70,0.5,-11)
+MinBtn.Text = "-"
+MinBtn.BackgroundColor3 = Color3.fromRGB(80,80,80)
+MinBtn.TextColor3 = Color3.fromRGB(255,255,255)
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.TextSize = 14
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0,8)
+
+-- Container สำหรับปุ่ม
+local ContentFrame = Instance.new("Frame", Frame)
+ContentFrame.Size = UDim2.new(1, -20, 1, -40)
+ContentFrame.Position = UDim2.new(0,10,0,35)
+ContentFrame.BackgroundTransparency = 1
+
+-- List Layout
+local ListLayout = Instance.new("UIListLayout", ContentFrame)
+ListLayout.Padding = UDim.new(0, 8)
+ListLayout.FillDirection = Enum.FillDirection.Vertical
+ListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ListLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+
+-- ฟังก์ชัน Minimize
+MinBtn.MouseButton1Click:Connect(function()
+    Minimized = not Minimized
+    ContentFrame.Visible = not Minimized
+    MinBtn.Text = Minimized and "+" or "-"
+    if Minimized then
+        Frame.Size = UDim2.new(0,260,0,40)
+    else
+        Frame.Size = UDim2.new(0,260,0,250)
+    end
+end)
+
 -- ===== Toggle Buttons =====
-local function createToggle(text, posY, callback)
-    local btn = Instance.new("TextButton", Frame)
-    btn.Size = UDim2.new(0, 200, 0, 35)
-    btn.Position = UDim2.new(0.5,-100,0,posY)
+local function createToggle(text, callback)
+    local btn = Instance.new("TextButton", ContentFrame)
+    btn.Size = UDim2.new(1, -20, 0, 35)
     btn.Text = text..": OFF"
     btn.TextColor3 = Color3.fromRGB(255,255,255)
     btn.BackgroundColor3 = Color3.fromRGB(70,130,180)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 14
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0,8)
+
     local enabled = false
     btn.MouseButton1Click:Connect(function()
         enabled = not enabled
@@ -76,11 +124,17 @@ local function createToggle(text, posY, callback)
     return btn
 end
 
--- Auto Claim Toggle
-createToggle("Auto Claim",40,function(state) AutoClaimEnabled = state end)
+-- Auto Claim
+createToggle("Auto Claim", function(state) AutoClaimEnabled = state end)
 
--- Auto Fish 2 Toggle
-createToggle("Auto Fish 2",85,function(state) AutoFish2Enabled = state end)
+-- Auto Fish 1
+createToggle("Auto Fish 1", function(state) AutoFish1Enabled = state end)
+
+-- Auto Fish 2
+createToggle("Auto Fish 2", function(state) AutoFish2Enabled = state end)
+
+-- Auto Fish 3
+createToggle("Auto Fish 3", function(state) AutoFish3Enabled = state end)
 
 -- ===== Dragging System =====
 local dragging, dragInput, dragStart, startPos
@@ -89,7 +143,7 @@ local function update(input)
     Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 end
 
-Frame.InputBegan:Connect(function(input)
+TopBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
         dragStart = input.Position
@@ -102,7 +156,7 @@ Frame.InputBegan:Connect(function(input)
     end
 end)
 
-Frame.InputChanged:Connect(function(input)
+TopBar.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement then
         dragInput = input
     end
@@ -128,164 +182,12 @@ local function ClaimPet(pet)
     end)
 end
 
-local function AutoFish2()
+local function DoAutoFish(baitName, toggleCheck)
     local focusArgs = {"Focus","FishRob"}
-    local throwArgs = {
-        "Throw",
-        {Bait = "FishingBait2", Pos = Vector3.new(156.904, 11, 558.944)}
-    }
+    local throwArgs = {"Throw",{Bait = baitName, Pos = Vector3.new(156.904, 11, 558.944)}}
     local successArgs = {"POUT",{SUC=1}}
 
-    while AutoFish2Enabled and UIExists do
-        -- เช็คว่าถือเบ็ดหรือยัง ถ้ายังถือไม่ได้ถือให้เอง
-        local hasRod = false
-        -- ตัวอย่างเช็ก (ต้องแก้ตามเกมจริง) เช่น ถ้ามีตัวแปรใน Player หรือ Tool
-        local char = LocalPlayer.Character
-        if char then
-            for _, tool in pairs(char:GetChildren()) do
-                if tool:IsA("Tool") and tool.Name == "FishingRod2" then
-                    hasRod = true
-                    break
-                end
-            end
-        end
-
-        if not hasRod then
-            pcall(function()
-                ReplicatedStorage:WaitForChild("Remote"):WaitForChild("CharacterRE"):FireServer(unpack(focusArgs))
-            end)
-        end
-
-        -- โยนเบ็ด
-        pcall(function()
-            FishingRE:FireServer(unpack(throwArgs))
-        end)
-
-        -- Spam Success รัว ๆ ทุก 0.1 วิ เป็นเวลา 1 วิ
-        local timer = 0
-        while timer < 1 do
-            if not AutoFish2Enabled or not UIExists then break end
-            pcall(function()
-                FishingRE:FireServer(unpack(successArgs))
-            end)
-            task.wait(0.1)
-            timer = timer + 0.1
-        end
-        -- วนกลับไปโยนเบ็ดใหม่
-    end
-end
-
-
--- ===== Loops =====
--- Auto Claim Loop
-task.spawn(function()
-    while UIExists do
-        if AutoClaimEnabled then
-            for _, pet in pairs(PetsFolder:GetChildren()) do
-                if not AutoClaimEnabled or not UIExists then break end
-                ClaimPet(pet)
-            end
-            if AutoClaimEnabled and UIExists then
-                task.wait(ClaimDelay)
-            end
-        else
-            task.wait(0.2)
-        end
-    end
-end)
-
--- Auto Fish 2 Loop
-task.spawn(function()
-    while UIExists do
-        if AutoFish2Enabled then
-            AutoFish2()
-        else
-            task.wait(0.2)
-        end
-    end
-end)
-
-
--- ===== Variables Auto Fish 1 =====
-local AutoFish1Enabled = false
-
--- ===== Toggle Button =====
-createToggle("Auto Fish 1",130,function(state) AutoFish1Enabled = state end)
-
--- ===== Auto Fish 1 Function =====
-local function AutoFish1()
-    local focusArgs = {"Focus","FishRob"}
-    local throwArgs = {
-        "Throw",
-        {Bait = "FishingBait1", Pos = Vector3.new(156.904, 11, 558.944)}
-    }
-    local successArgs = {"POUT",{SUC=1}}
-
-    while AutoFish1Enabled and UIExists do
-        -- เช็คถือเบ็ด
-        local hasRod = false
-        local char = LocalPlayer.Character
-        if char then
-            for _, tool in pairs(char:GetChildren()) do
-                if tool:IsA("Tool") and tool.Name == "FishingRod1" then
-                    hasRod = true
-                    break
-                end
-            end
-        end
-
-        if not hasRod then
-            pcall(function()
-                ReplicatedStorage:WaitForChild("Remote"):WaitForChild("CharacterRE"):FireServer(unpack(focusArgs))
-            end)
-        end
-
-        -- โยนเบ็ด
-        pcall(function()
-            FishingRE:FireServer(unpack(throwArgs))
-        end)
-
-        -- Spam Success รัว ๆ 1 วิ
-        local timer = 0
-        while timer < 1 do
-            if not AutoFish1Enabled or not UIExists then break end
-            pcall(function()
-                FishingRE:FireServer(unpack(successArgs))
-            end)
-            task.wait(0.1)
-            timer = timer + 0.1
-        end
-    end
-end
-
--- ===== Auto Fish 1 Loop =====
-task.spawn(function()
-    while UIExists do
-        if AutoFish1Enabled then
-            AutoFish1()
-        else
-            task.wait(0.2)
-        end
-    end
-end)
-
-
--- ===== Variables Auto Fish 3 =====
-local AutoFish3Enabled = false
-
--- ===== Toggle Button =====
-createToggle("Auto Fish 3",160,function(state) AutoFish3Enabled = state end)
-
--- ===== Auto Fish 3 Function =====
-local function AutoFish3()
-    local focusArgs = {"Focus","FishRob"}
-    local throwArgs = {
-        "Throw",
-        {Bait = "FishingBait3", Pos = Vector3.new(156.904, 11, 558.944)}
-    }
-    local successArgs = {"POUT",{SUC=1}}
-
-    while AutoFish3Enabled and UIExists do
+    while toggleCheck() and UIExists do
         -- เช็คถือเบ็ด
         local hasRod = false
         local char = LocalPlayer.Character
@@ -309,27 +211,66 @@ local function AutoFish3()
             FishingRE:FireServer(unpack(throwArgs))
         end)
 
-        -- Spam Success รัว ๆ 1 วิ
+        -- Spam Success 1 วิ
         local timer = 0
         while timer < 1 do
-            if not AutoFish3Enabled or not UIExists then break end
+            if not toggleCheck() or not UIExists then break end
             pcall(function()
                 FishingRE:FireServer(unpack(successArgs))
             end)
             task.wait(0.1)
-            timer = timer + 0.1
+            timer += 0.1
         end
     end
 end
 
--- ===== Auto Fish 3 Loop =====
+-- ===== Loops =====
+-- Auto Claim
 task.spawn(function()
     while UIExists do
-        if AutoFish3Enabled then
-            AutoFish3()
+        if AutoClaimEnabled then
+            for _, pet in pairs(PetsFolder:GetChildren()) do
+                if not AutoClaimEnabled or not UIExists then break end
+                ClaimPet(pet)
+            end
+            if AutoClaimEnabled and UIExists then
+                task.wait(ClaimDelay)
+            end
         else
             task.wait(0.2)
         end
     end
 end)
 
+-- Auto Fish 1
+task.spawn(function()
+    while UIExists do
+        if AutoFish1Enabled then
+            DoAutoFish("FishingBait1", function() return AutoFish1Enabled end)
+        else
+            task.wait(0.2)
+        end
+    end
+end)
+
+-- Auto Fish 2
+task.spawn(function()
+    while UIExists do
+        if AutoFish2Enabled then
+            DoAutoFish("FishingBait2", function() return AutoFish2Enabled end)
+        else
+            task.wait(0.2)
+        end
+    end
+end)
+
+-- Auto Fish 3
+task.spawn(function()
+    while UIExists do
+        if AutoFish3Enabled then
+            DoAutoFish("FishingBait3", function() return AutoFish3Enabled end)
+        else
+            task.wait(0.2)
+        end
+    end
+end)
